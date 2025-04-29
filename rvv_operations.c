@@ -3,6 +3,11 @@
 #include <riscv_vector.h>
 #include <stdlib.h>
 
+/*
+* Function to convert a character sequence to an integer sequence
+* where 'A' = 0, 'B' = 1, 'C' = 2, 'D' = 3.
+* The function uses vectorized operations for efficiency.
+*/
 int *optimizeCharSeq(const char *seq, int length) {
     int *queryInt = malloc(length * sizeof(int));
     const char *ptr = seq;
@@ -15,7 +20,7 @@ int *optimizeCharSeq(const char *seq, int length) {
         vl = __riscv_vsetvl_e8m1(avl);
         
         // Load 8-bit characters
-        vint8m1_t v_seq = __riscv_vle8_v_i8m1(ptr, vl);
+        vint8m1_t v_seq = __riscv_vle8_v_i8m1((const int8_t*)ptr, vl);
         
         // Subtract 'A' from each character
         vint8m1_t v_sub = __riscv_vsub_vx_i8m1(v_seq, 'A', vl);
@@ -35,6 +40,11 @@ int *optimizeCharSeq(const char *seq, int length) {
     return queryInt;
 }
 
+/*
+* Function to fill the scoring matrix H using vectorized operations.
+* The function computes the maximum score in the matrix and stores it in max_score.
+* The function uses the BLOSUM62 scoring matrix for scoring.
+*/
 void fill_matrix(int *H, const int *seq1, const int *seq2, int rows, int cols, int *max_score) {
     *max_score = 0;
     vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
