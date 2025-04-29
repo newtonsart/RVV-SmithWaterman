@@ -1,9 +1,9 @@
-# clang-17 -o vector_add.clang vector_add.c -O2 -march=rv64imafdcv -no-integrated-as
 CC = clang-17
-CFLAGS = -O2 -march=rv64imafdcv -no-integrated-as
+CFLAGS = -O2 -march=rv64imafdcv -no-integrated-as -MMD
 TARGET = RVVSW
-SRC = RVVSW.c fasta_parser.c
+SRC = RVVSW.c fasta_parser.c blosum.c matrix_operations.c rvv_operations.c
 OBJ = $(SRC:.c=.o)
+DEP = $(SRC:.c=.d)
 
 .PHONY: all clean
 
@@ -12,8 +12,10 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $^ -o $@
 
-%.o: %.c fasta_parser.h
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+-include $(DEP)
+
 clean:
-	$(RM) $(OBJ) $(TARGET)
+	$(RM) $(OBJ) $(TARGET) $(DEP)
