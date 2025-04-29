@@ -1,4 +1,6 @@
 #include "matrix_operations.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 int *create_matrix(int rows, int cols) {
     return (int *)calloc(rows * cols, sizeof(int));
