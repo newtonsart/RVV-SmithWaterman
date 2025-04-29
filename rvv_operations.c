@@ -12,19 +12,19 @@ int *optimizeCharSeq(const char *seq, int length) {
 
     while(avl > 0) {
         // Configure the vector length for 8-bit elements
-        vl = vsetvl_e8m1(avl);
+        vl = __riscv_vsetvl_e8m1(avl);
         
         // Load 8-bit characters
-        vint8m1_t v_seq = vle8_v_i8m1(ptr, vl);
+        vint8m1_t v_seq = __riscv_vle8_v_i8m1(ptr, vl);
         
         // Subtract 'A' from each character
-        vint8m1_t v_sub = vsub_vx_i8m1(v_seq, 'A', vl);
+        vint8m1_t v_sub = __riscv_vsub_vx_i8m1(v_seq, 'A', vl);
         
         // Convert 8-bit to 32-bit
-        vint32m4_t v_sub_32 = vsext_vf4_i32m4(v_sub, vl);
+        vint32m4_t v_sub_32 = __riscv_vsext_vf4_i32m4(v_sub, vl);
         
         // Store the results in the output array
-        vse32_v_i32m4(out_ptr, v_sub_32, vl);
+        __riscv_vse32_v_i32m4(out_ptr, v_sub_32, vl);
         
         // Update the pointers and remaining elements
         ptr += vl;
