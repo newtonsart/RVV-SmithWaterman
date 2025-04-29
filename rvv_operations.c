@@ -1,6 +1,7 @@
 #include "rvv_operations.h"
 #include "blosum.h"
 #include <riscv_vector.h>
+#include <stdlib.h>
 
 int *optimizeCharSeq(const char *seq, int length) {
     int *queryInt = malloc(length * sizeof(int));
