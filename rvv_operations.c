@@ -283,12 +283,10 @@ void fill_matrix_lmul8(int *H, const int *seq1, const int *seq2, int rows, int c
     *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec); 
 }
 
-void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, 
-                int rows, int cols, int *max_score) {
+void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int cols, int *max_score) {
     *max_score = 0;
     vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
-    const int vlen = __riscv_vsetvlmax_e32m4(); // Máxima longitud vectorial
-
+    
     for (int d = 2; d <= rows + cols - 2; d++) {
         int i_start = (d <= cols) ? 1 : (d - cols + 1);
         int i_end = (d <= rows) ? (d - 1) : (rows - 1);
@@ -297,46 +295,58 @@ void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2,
         for (int offset = 0; offset < len; ) {
             size_t vl = __riscv_vsetvl_e32m4(len - offset);
             
-            // Generar índices vectoriales
-            vuint32m4_t vidx = __riscv_vid_v_u32m4(vl);
+            // 1. Generar índices vectoriales
+            vint32m4_t vidx = __riscv_vid_v_i32m4(vl);
             vint32m4_t i_vec = __riscv_vadd_vx_i32m4(vidx, i_start + offset, vl);
-            vint32m4_t j_vec = __riscv_vrsub_vx_i32m4(i_vec, d, vl); // j = d - i
+            vint32m4_t j_vec = __riscv_vrsub_vx_i32m4(i_vec, d, vl);
 
-            // 1. Cargar scores BLOSUM en 8 bits
+            // 2. Cargar secuencias y calcular índices BLOSUM
             vint32m4_t a_idx = __riscv_vsub_vx_i32m4(i_vec, 1, vl);
             vint32m4_t b_idx = __riscv_vsub_vx_i32m4(j_vec, 1, vl);
             
-            vint8m4_t a = __riscv_vloxei32_v_i8m4(seq1, a_idx, vl);
-            vint8m4_t b = __riscv_vloxei32_v_i8m4(seq2, b_idx, vl);
+            vint8m4_t a = __riscv_vloxei32_v_i8m4(seq1, (vuint32m4_t)a_idx, vl);
+            vint8m4_t b = __riscv_vloxei32_v_i8m4(seq2, (vuint32m4_t)b_idx, vl);
             
             vint32m4_t blosum_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(__riscv_vsext_vf4_i32m4(a, vl), 26, vl),
-                __riscv_vsext_vf4_i32m4(b, vl), vl
+                __riscv_vmul_vx_i32m4(__riscv_vsext_vf4_i32m4(a), 26, vl),
+                __riscv_vsext_vf4_i32m4(b), vl
             );
             
-            vint8m4_t blosum8 = __riscv_vluxei32_v_i8m4(iBlosum62, blosum_idx, vl);
-            vint32m4_t blosum = __riscv_vsext_vf4_i32m4(blosum8, vl);
+            vint8m4_t blosum8 = __riscv_vloxei32_v_i8m4(iBlosum62, (vuint32m4_t)blosum_idx, vl);
+            vint32m4_t blosum = __riscv_vsext_vf4_i32m4(blosum8);
 
-            // 2. Cargar valores de H usando índices calculados
-            vint32m4_t diag_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(a_idx, cols, vl),
-                b_idx, vl
+            // 3. Cargar valores de H
+            vint32m4_t diag = __riscv_vluxei32_v_i32m4(
+                H, 
+                (vuint32m4_t)__riscv_vadd_vv_i32m4(
+                    __riscv_vmul_vx_i32m4(a_idx, cols, vl),
+                    b_idx, 
+                    vl
+                ),
+                vl
             );
-            vint32m4_t diag = __riscv_vluxei32_v_i32m4(H, diag_idx, vl);
-
-            vint32m4_t up_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(a_idx, cols, vl),
-                j_vec, vl
+            
+            vint32m4_t up = __riscv_vluxei32_v_i32m4(
+                H,
+                (vuint32m4_t)__riscv_vadd_vv_i32m4(
+                    __riscv_vmul_vx_i32m4(a_idx, cols, vl),
+                    j_vec,
+                    vl
+                ),
+                vl
             );
-            vint32m4_t up = __riscv_vluxei32_v_i32m4(H, up_idx, vl);
-
-            vint32m4_t left_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(i_vec, cols, vl),
-                b_idx, vl
+            
+            vint32m4_t left = __riscv_vluxei32_v_i32m4(
+                H,
+                (vuint32m4_t)__riscv_vadd_vv_i32m4(
+                    __riscv_vmul_vx_i32m4(i_vec, cols, vl),
+                    b_idx,
+                    vl
+                ),
+                vl
             );
-            vint32m4_t left = __riscv_vluxei32_v_i32m4(H, left_idx, vl);
 
-            // 3. Cálculos vectoriales
+            // 4. Cálculos vectoriales
             vint32m4_t match = __riscv_vadd_vv_i32m4(diag, blosum, vl);
             vint32m4_t del = __riscv_vadd_vx_i32m4(up, GAP, vl);
             vint32m4_t ins = __riscv_vadd_vx_i32m4(left, GAP, vl);
@@ -345,14 +355,19 @@ void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2,
             tmp = __riscv_vmax_vv_i32m4(tmp, ins, vl);
             tmp = __riscv_vmax_vx_i32m4(tmp, 0, vl);
 
-            // 4. Actualizar máximo y almacenar
+            // 5. Actualizar máximo y almacenar
             current_max_vec = __riscv_vredmax_vs_i32m4_i32m1(tmp, current_max_vec, vl);
             
-            vint32m4_t store_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(i_vec, cols, vl),
-                j_vec, vl
+            __riscv_vsoxei32_v_i32m4(
+                H,
+                (vuint32m4_t)__riscv_vadd_vv_i32m4(
+                    __riscv_vmul_vx_i32m4(i_vec, cols, vl),
+                    j_vec,
+                    vl
+                ),
+                tmp,
+                vl
             );
-            __riscv_vsoxei32_v_i32m4(H, store_idx, tmp, vl);
 
             offset += vl;
         }
