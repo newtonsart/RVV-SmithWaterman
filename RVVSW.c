@@ -17,6 +17,7 @@
 #include <riscv_vector.h>
 #include <limits.h>
 #include <ctype.h>
+#include <stdint.h>
 #include "fasta_parser.h"
 #include "blosum.h"
 #include "matrix_operations.h"
@@ -104,7 +105,7 @@ int main(int argc, char **argv)
         int max_score = 0;
         char *max_db = malloc(1024);
         rows = query.sequence_length + 1;
-        int *queryInt = optimizeCharSeq(query.sequence, rows - 1);
+        int8_t *queryInt = optimizeCharSeq(query.sequence, rows - 1);
 
         FASTA_Parser *db_parser = fasta_init(DATABASE);
         if (!db_parser)
@@ -121,8 +122,9 @@ int main(int argc, char **argv)
 
             int *H = create_matrix(rows, cols);
             int local_max_score = 0;
-            int *dbInt = optimizeCharSeq(db.sequence, cols - 1);
-
+            int8_t *dbInt = optimizeCharSeq(db.sequence, cols - 1);
+            fill_matrix_new(H, queryInt, dbInt, rows, cols, &local_max_score);
+/*
             switch (lmul_value) {
                 case 1:
                     fill_matrix(H, queryInt, dbInt, rows, cols, &local_max_score);
@@ -140,7 +142,7 @@ int main(int argc, char **argv)
                     fprintf(stderr, "Error: LMUL has to be 1, 2, 4 or 8.\n");
                     return 0;
             }
-
+*/
             if (local_max_score > max_score) {
                 max_score = local_max_score;
                 strcpy(max_db, db.header);

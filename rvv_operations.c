@@ -2,36 +2,30 @@
 #include "blosum.h"
 #include <riscv_vector.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 /*
 * Function to convert a character sequence to an integer sequence
 * where 'A' = 0, 'B' = 1, 'C' = 2, 'D' = 3.
 * The function uses vectorized operations for efficiency.
 */
-int *optimizeCharSeq(const char *seq, int length) {
-    int *queryInt = malloc(length * sizeof(int));
+int8_t *optimizeCharSeq8(const char *seq, int length) {
+    int8_t *queryInt = malloc(length * sizeof(int8_t));
     const char *ptr = seq;
-    int *out_ptr = queryInt;
+    int8_t *out_ptr = queryInt;
     size_t vl;
     size_t avl = length;
 
     while(avl > 0) {
-        // Configure the vector length for 8-bit elements
-        vl = __riscv_vsetvl_e8m1(avl);
+        vl = __riscv_vsetvl_e8m2(avl);  // Usamos LMUL=2 para más elementos
         
-        // Load 8-bit characters
-        vint8m1_t v_seq = __riscv_vle8_v_i8m1((const int8_t*)ptr, vl);
+        // Cargar y procesar caracteres simultaneamente
+        vint8m2_t v_seq = __riscv_vle8_v_i8m2((const int8_t*)ptr, vl);
+        vint8m2_t v_sub = __riscv_vsub_vx_i8m2(v_seq, 'A', vl);
         
-        // Subtract 'A' from each character
-        vint8m1_t v_sub = __riscv_vsub_vx_i8m1(v_seq, 'A', vl);
+        // Almacenar directamente en 8 bits
+        __riscv_vse8_v_i8m2(out_ptr, v_sub, vl);
         
-        // Convert 8-bit to 32-bit
-        vint32m4_t v_sub_32 = __riscv_vsext_vf4_i32m4(v_sub, vl);
-        
-        // Store the results in the output array
-        __riscv_vse32_v_i32m4(out_ptr, v_sub_32, vl);
-        
-        // Update the pointers and remaining elements
         ptr += vl;
         out_ptr += vl;
         avl -= vl;
@@ -287,4 +281,82 @@ void fill_matrix_lmul8(int *H, const int *seq1, const int *seq2, int rows, int c
     }
 
     *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec); 
+}
+
+void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, 
+                int rows, int cols, int *max_score) {
+    *max_score = 0;
+    vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
+    const int vlen = __riscv_vsetvlmax_e32m4(); // Máxima longitud vectorial
+
+    for (int d = 2; d <= rows + cols - 2; d++) {
+        int i_start = (d <= cols) ? 1 : (d - cols + 1);
+        int i_end = (d <= rows) ? (d - 1) : (rows - 1);
+        int len = i_end - i_start + 1;
+
+        for (int offset = 0; offset < len; ) {
+            size_t vl = __riscv_vsetvl_e32m4(len - offset);
+            
+            // Generar índices vectoriales
+            vuint32m4_t vidx = __riscv_vid_v_u32m4(vl);
+            vint32m4_t i_vec = __riscv_vadd_vx_i32m4(vidx, i_start + offset, vl);
+            vint32m4_t j_vec = __riscv_vrsub_vx_i32m4(i_vec, d, vl); // j = d - i
+
+            // 1. Cargar scores BLOSUM en 8 bits
+            vint32m4_t a_idx = __riscv_vsub_vx_i32m4(i_vec, 1, vl);
+            vint32m4_t b_idx = __riscv_vsub_vx_i32m4(j_vec, 1, vl);
+            
+            vint8m4_t a = __riscv_vloxei32_v_i8m4(seq1, a_idx, vl);
+            vint8m4_t b = __riscv_vloxei32_v_i8m4(seq2, b_idx, vl);
+            
+            vint32m4_t blosum_idx = __riscv_vadd_vv_i32m4(
+                __riscv_vmul_vx_i32m4(__riscv_vsext_vf4_i32m4(a, vl), 26, vl),
+                __riscv_vsext_vf4_i32m4(b, vl), vl
+            );
+            
+            vint8m4_t blosum8 = __riscv_vluxei32_v_i8m4(iBlosum62, blosum_idx, vl);
+            vint32m4_t blosum = __riscv_vsext_vf4_i32m4(blosum8, vl);
+
+            // 2. Cargar valores de H usando índices calculados
+            vint32m4_t diag_idx = __riscv_vadd_vv_i32m4(
+                __riscv_vmul_vx_i32m4(a_idx, cols, vl),
+                b_idx, vl
+            );
+            vint32m4_t diag = __riscv_vluxei32_v_i32m4(H, diag_idx, vl);
+
+            vint32m4_t up_idx = __riscv_vadd_vv_i32m4(
+                __riscv_vmul_vx_i32m4(a_idx, cols, vl),
+                j_vec, vl
+            );
+            vint32m4_t up = __riscv_vluxei32_v_i32m4(H, up_idx, vl);
+
+            vint32m4_t left_idx = __riscv_vadd_vv_i32m4(
+                __riscv_vmul_vx_i32m4(i_vec, cols, vl),
+                b_idx, vl
+            );
+            vint32m4_t left = __riscv_vluxei32_v_i32m4(H, left_idx, vl);
+
+            // 3. Cálculos vectoriales
+            vint32m4_t match = __riscv_vadd_vv_i32m4(diag, blosum, vl);
+            vint32m4_t del = __riscv_vadd_vx_i32m4(up, GAP, vl);
+            vint32m4_t ins = __riscv_vadd_vx_i32m4(left, GAP, vl);
+            
+            vint32m4_t tmp = __riscv_vmax_vv_i32m4(match, del, vl);
+            tmp = __riscv_vmax_vv_i32m4(tmp, ins, vl);
+            tmp = __riscv_vmax_vx_i32m4(tmp, 0, vl);
+
+            // 4. Actualizar máximo y almacenar
+            current_max_vec = __riscv_vredmax_vs_i32m4_i32m1(tmp, current_max_vec, vl);
+            
+            vint32m4_t store_idx = __riscv_vadd_vv_i32m4(
+                __riscv_vmul_vx_i32m4(i_vec, cols, vl),
+                j_vec, vl
+            );
+            __riscv_vsoxei32_v_i32m4(H, store_idx, tmp, vl);
+
+            offset += vl;
+        }
+    }
+
+    *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec);
 }

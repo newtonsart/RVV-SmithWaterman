@@ -1,7 +1,8 @@
 #include "blosum.h"
+#include <stdint.h>
 
 int GAP = -4;
-const int iBlosum62[] = {
+const int8_t iBlosum62[] = {
     //  A   B   C   D   E   F   G   H   I   J   K   L   M   N   O   P   Q   R   S   T   U   V   W   X   Y   Z
          4, -2,  0, -2, -1, -2,  0, -2, -1, -1, -1, -1, -1, -2, -4, -1, -1, -1,  1,  0, -4,  0, -3, -1, -2, -1, 
         -2,  4, -3,  4,  1, -3, -1,  0, -3, -3,  0, -4, -3,  4, -4, -2,  0, -1,  0, -1, -4, -3, -4, -1, -3,  0, 

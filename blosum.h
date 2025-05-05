@@ -2,6 +2,6 @@
 #define BLOSUM_H
 
 extern int GAP;
-extern const int iBlosum62[];
+extern const int8_t iBlosum62[];
 
 #endif
