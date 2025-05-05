@@ -9,7 +9,7 @@
 * where 'A' = 0, 'B' = 1, 'C' = 2, 'D' = 3.
 * The function uses vectorized operations for efficiency.
 */
-int8_t *optimizeCharSeq8(const char *seq, int length) {
+int8_t *optimizeCharSeq(const char *seq, int length) {
     int8_t *queryInt = malloc(length * sizeof(int8_t));
     const char *ptr = seq;
     int8_t *out_ptr = queryInt;
