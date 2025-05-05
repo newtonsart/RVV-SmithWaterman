@@ -73,7 +73,7 @@ void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int c
             vint32m1_t vec_left = __riscv_vle32_v_i32m1(temp_left, vl);
 
             // Calculate BLOSUM scores for this block
-            vint32m1_t vec_blosum = __riscv_vle32_v_i32m1(temp_blosum, vl);
+            vint32m1_t vec_blosum = __riscv_vle8_v_i8m1(temp_blosum, vl);
 
             // Vector operations
             vint32m1_t vec_match = __riscv_vadd_vv_i32m1(vec_diag, vec_blosum, vl);
@@ -282,59 +282,4 @@ void fill_matrix_lmul8(int *H, const int *seq1, const int *seq2, int rows, int c
     }
 
     *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec); 
-}
-
-void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int cols, int *max_score) {
-    *max_score = 0;
-    vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
-    
-    for (int d = 2; d <= rows + cols - 2; d++) {
-        int i_start = (d <= cols) ? 1 : (d - cols + 1);
-        int i_end = (d <= rows) ? (d - 1) : (rows - 1);
-        int len = i_end - i_start + 1;
-
-        for (int offset = 0; offset < len; ) {
-            size_t vl = __riscv_vsetvl_e8m4(len - offset);  // Usar 8 bits
-            
-            // 1. Cargar secuencias en 8 bits
-            vint8m4_t a = __riscv_vle8_v_i8m4(seq1 + i_start + offset - 1, vl);
-            vint8m4_t b = __riscv_vle8_v_i8m4(seq2 + (d - i_start - offset) - 1, vl);
-            
-            // 2. Convertir a 32 bits con extensión de signo
-            vint32m4_t a_32 = __riscv_vsext_vf4_i32m4(a);
-            vint32m4_t b_32 = __riscv_vsext_vf4_i32m4(b);
-            
-            // 3. Calcular índices BLOSUM (a * 26 + b)
-            vint32m4_t blosum_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(a_32, 26, vl),
-                b_32,
-                vl
-            );
-            
-            // 4. Cargar valores BLOSUM
-            vint8m4_t blosum8 = __riscv_vloxei32_v_i8m4(iBlosum62, blosum_idx, vl);
-            vint32m4_t blosum = __riscv_vsext_vf4_i32m4(blosum8);
-            
-            // 5. Cargar valores de H
-            vint32m4_t diag = __riscv_vle32_v_i32m4(H + (i_start + offset - 2) * cols + (d - i_start - offset - 1), vl);
-            vint32m4_t up = __riscv_vle32_v_i32m4(H + (i_start + offset - 2) * cols + (d - i_start - offset), vl);
-            vint32m4_t left = __riscv_vle32_v_i32m4(H + (i_start + offset - 1) * cols + (d - i_start - offset - 1), vl);
-            
-            // 6. Cálculos vectoriales
-            vint32m4_t match = __riscv_vadd_vv_i32m4(diag, blosum, vl);
-            vint32m4_t del = __riscv_vadd_vx_i32m4(up, GAP, vl);
-            vint32m4_t ins = __riscv_vadd_vx_i32m4(left, GAP, vl);
-            
-            vint32m4_t tmp = __riscv_vmax_vv_i32m4(__riscv_vmax_vv_i32m4(match, del, vl), ins, vl);
-            tmp = __riscv_vmax_vx_i32m4(tmp, 0, vl);
-            
-            // 7. Actualizar máximo y almacenar
-            current_max_vec = __riscv_vredmax_vs_i32m4_i32m1(tmp, current_max_vec, vl);
-            __riscv_vse32_v_i32m4(H + (i_start + offset - 1) * cols + (d - i_start - offset), tmp, vl);
-
-            offset += vl;
-        }
-    }
-
-    *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec);
 }
