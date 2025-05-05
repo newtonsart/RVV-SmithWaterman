@@ -101,7 +101,7 @@ void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int c
     *max_score = __riscv_vmv_x_s_i32m1_i32(current_max_vec); 
 }
 
-void fill_matrix_lmul2(int *H, const int8_t *seq1, const int *seq2, int rows, int cols, int *max_score) {
+void fill_matrix_lmul2(int *H, const int *seq1, const int *seq2, int rows, int cols, int *max_score) {
     *max_score = 0;
     vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
 
