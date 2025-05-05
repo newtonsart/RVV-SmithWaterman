@@ -73,7 +73,8 @@ void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int c
             vint32m1_t vec_left = __riscv_vle32_v_i32m1(temp_left, vl);
 
             // Calculate BLOSUM scores for this block
-            vint32m1_t vec_blosum = __riscv_vle8_v_i8m1(temp_blosum, vl);
+            vint8m1_t vec_blosum8 = __riscv_vle8_v_i8m1(temp_blosum, vl);
+            vint32m1_t vec_blosum = __riscv_vsext_vf4_i32m1(vec_blosum8, vl);
 
             // Vector operations
             vint32m1_t vec_match = __riscv_vadd_vv_i32m1(vec_diag, vec_blosum, vl);
