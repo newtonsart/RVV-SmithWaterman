@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "array": "c"
+        "array": "c",
+        "riscv_vector.h": "c"
     }
 }

@@ -2,6 +2,7 @@
 #define RVV_OPERATIONS_H
 
 #include <riscv_vector.h>
+#include <stdint.h>
 
 int8_t *optimizeCharSeq(const char *seq, int length);
 void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int cols, int *max_score);
