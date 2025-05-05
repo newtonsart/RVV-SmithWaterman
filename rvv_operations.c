@@ -256,8 +256,8 @@ void fill_matrix_lmul8(int *H, const int8_t *seq1, const int8_t *seq2, int rows,
             vint32m8_t vec_del = __riscv_vadd_vx_i32m8(vec_up, GAP, vl);
             vint32m8_t vec_ins = __riscv_vadd_vx_i32m8(vec_left, GAP, vl);
             
-            vint32m8_t vec_tmp = __riscv_vmax_vv_i32m2(
-                __riscv_vmax_vv_i32m2(vec_match, vec_del, vl),
+            vint32m8_t vec_tmp = __riscv_vmax_vv_i32m8(
+                __riscv_vmax_vv_i32m8(vec_match, vec_del, vl),
                 vec_ins, vl
             );
             vec_tmp = __riscv_vmax_vx_i32m8(vec_tmp, 0, vl);
