@@ -48,44 +48,46 @@ void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int c
         int i_end = (d <= rows) ? (d - 1) : (rows - 1);
         int len = i_end - i_start + 1;
 
-        // Buffers
-        int temp_diag[32], temp_up[32], temp_left[32], temp_result[32];
-        int8_t temp_blosum[32];
+        // Buffers para valores convertidos a 32 bits
+        int temp_diag[32], temp_up[32], temp_left[32], temp_result[32], temp_blosum[32];
 
         for (int offset = 0; offset < len; ) {
             size_t vl = __riscv_vsetvl_e32m1(len - offset);
 
-            // Llenado de buffers
+            // Llenar buffers con extensión manual de signo
             for (int k = 0; k < vl; k++) {
                 int i = i_start + offset + k;
                 int j = d - i;
+                
                 temp_diag[k] = H[(i-1)*cols + (j-1)];
                 temp_up[k] = H[(i-1)*cols + j];
                 temp_left[k] = H[i*cols + (j-1)];
-                temp_blosum[k] = iBlosum62[seq1[i-1] * 26 + seq2[j-1]];
+                temp_blosum[k] = (int)iBlosum62[seq1[i - 1] * 26 + seq2[j - 1]]; // Extensión manual
             }
 
-            // Carga y extensión de signo corregida
-            vint8m1_t vec_blosum8 = __riscv_vle8_v_i8m1(temp_blosum, vl);
-            vint16m2_t vec_blosum16 = __riscv_vwcvt_x_x_v_i16m2(vec_blosum8, vl);
-            vint32m1_t vec_blosum = __riscv_vwcvt_x_x_v_i32m1(vec_blosum16, vl);
-
-            // Resto del código sin cambios
+            // Cargar vectores de 32 bits directamente
             vint32m1_t vec_diag = __riscv_vle32_v_i32m1(temp_diag, vl);
             vint32m1_t vec_up = __riscv_vle32_v_i32m1(temp_up, vl);
             vint32m1_t vec_left = __riscv_vle32_v_i32m1(temp_left, vl);
+            vint32m1_t vec_blosum = __riscv_vle32_v_i32m1(temp_blosum, vl);
 
+            // Operaciones vectoriales originales
             vint32m1_t vec_match = __riscv_vadd_vv_i32m1(vec_diag, vec_blosum, vl);
             vint32m1_t vec_del = __riscv_vadd_vx_i32m1(vec_up, GAP, vl);
             vint32m1_t vec_ins = __riscv_vadd_vx_i32m1(vec_left, GAP, vl);
-            vint32m1_t vec_tmp = __riscv_vmax_vv_i32m1(__riscv_vmax_vv_i32m1(vec_match, vec_del, vl), vec_ins, vl);
+            
+            vint32m1_t vec_tmp = __riscv_vmax_vv_i32m1(
+                __riscv_vmax_vv_i32m1(vec_match, vec_del, vl),
+                vec_ins, vl
+            );
             vec_tmp = __riscv_vmax_vx_i32m1(vec_tmp, 0, vl);
 
             current_max_vec = __riscv_vredmax_vs_i32m1_i32m1(vec_tmp, current_max_vec, vl);
             
             __riscv_vse32_v_i32m1(temp_result, vec_tmp, vl);
             for (int k = 0; k < vl; k++) {
-                H[(i_start + offset + k)*cols + (d - (i_start + offset + k))] = temp_result[k];
+                int i = i_start + offset + k;
+                H[i * cols + (d - i)] = temp_result[k];
             }
 
             offset += vl;
