@@ -286,7 +286,8 @@ void fill_matrix_lmul8(int *H, const int *seq1, const int *seq2, int rows, int c
 void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int cols, int *max_score) {
     *max_score = 0;
     vint32m1_t current_max_vec = __riscv_vmv_v_x_i32m1(0, 1);
-    
+    const int vlen = __riscv_vsetvlmax_e32m4();
+
     for (int d = 2; d <= rows + cols - 2; d++) {
         int i_start = (d <= cols) ? 1 : (d - cols + 1);
         int i_end = (d <= rows) ? (d - 1) : (rows - 1);
@@ -300,74 +301,36 @@ void fill_matrix_new(int *H, const int8_t *seq1, const int8_t *seq2, int rows, i
             vint32m4_t i_vec = __riscv_vadd_vx_i32m4(vidx, i_start + offset, vl);
             vint32m4_t j_vec = __riscv_vrsub_vx_i32m4(i_vec, d, vl);
 
-            // 2. Cargar secuencias y calcular índices BLOSUM
-            vint32m4_t a_idx = __riscv_vsub_vx_i32m4(i_vec, 1, vl);
-            vint32m4_t b_idx = __riscv_vsub_vx_i32m4(j_vec, 1, vl);
-            
-            vint8m4_t a = __riscv_vloxei32_v_i8m4(seq1, (vuint32m4_t)a_idx, vl);
-            vint8m4_t b = __riscv_vloxei32_v_i8m4(seq2, (vuint32m4_t)b_idx, vl);
-            
+            // 2. Cargar valores de las secuencias
+            vint32m4_t a = __riscv_vle8_v_i32m4(seq1 + i_start + offset - 1, vl);
+            vint32m4_t b = __riscv_vle8_v_i32m4(seq2 + (d - i_start - offset) - 1, vl);
+
+            // 3. Calcular índices BLOSUM (a * 26 + b)
             vint32m4_t blosum_idx = __riscv_vadd_vv_i32m4(
-                __riscv_vmul_vx_i32m4(__riscv_vsext_vf4_i32m4(a), 26, vl),
-                __riscv_vsext_vf4_i32m4(b), vl
-            );
-            
-            vint8m4_t blosum8 = __riscv_vloxei32_v_i8m4(iBlosum62, (vuint32m4_t)blosum_idx, vl);
-            vint32m4_t blosum = __riscv_vsext_vf4_i32m4(blosum8);
-
-            // 3. Cargar valores de H
-            vint32m4_t diag = __riscv_vluxei32_v_i32m4(
-                H, 
-                (vuint32m4_t)__riscv_vadd_vv_i32m4(
-                    __riscv_vmul_vx_i32m4(a_idx, cols, vl),
-                    b_idx, 
-                    vl
-                ),
-                vl
-            );
-            
-            vint32m4_t up = __riscv_vluxei32_v_i32m4(
-                H,
-                (vuint32m4_t)__riscv_vadd_vv_i32m4(
-                    __riscv_vmul_vx_i32m4(a_idx, cols, vl),
-                    j_vec,
-                    vl
-                ),
-                vl
-            );
-            
-            vint32m4_t left = __riscv_vluxei32_v_i32m4(
-                H,
-                (vuint32m4_t)__riscv_vadd_vv_i32m4(
-                    __riscv_vmul_vx_i32m4(i_vec, cols, vl),
-                    b_idx,
-                    vl
-                ),
+                __riscv_vmul_vx_i32m4(a, 26, vl),
+                b,
                 vl
             );
 
-            // 4. Cálculos vectoriales
+            // 4. Cargar valores BLOSUM
+            vint32m4_t blosum = __riscv_vle8_v_i32m4(iBlosum62, blosum_idx, vl);
+
+            // 5. Cargar valores de H
+            vint32m4_t diag = __riscv_vle32_v_i32m4(H + (i_start + offset - 2) * cols + (d - i_start - offset - 1), vl);
+            vint32m4_t up = __riscv_vle32_v_i32m4(H + (i_start + offset - 2) * cols + (d - i_start - offset), vl);
+            vint32m4_t left = __riscv_vle32_v_i32m4(H + (i_start + offset - 1) * cols + (d - i_start - offset - 1), vl);
+
+            // 6. Cálculos vectoriales
             vint32m4_t match = __riscv_vadd_vv_i32m4(diag, blosum, vl);
             vint32m4_t del = __riscv_vadd_vx_i32m4(up, GAP, vl);
             vint32m4_t ins = __riscv_vadd_vx_i32m4(left, GAP, vl);
             
-            vint32m4_t tmp = __riscv_vmax_vv_i32m4(match, del, vl);
-            tmp = __riscv_vmax_vv_i32m4(tmp, ins, vl);
+            vint32m4_t tmp = __riscv_vmax_vv_i32m4(__riscv_vmax_vv_i32m4(match, del, vl), ins, vl);
             tmp = __riscv_vmax_vx_i32m4(tmp, 0, vl);
 
-            // 5. Actualizar máximo y almacenar
+            // 7. Actualizar máximo y almacenar
             current_max_vec = __riscv_vredmax_vs_i32m4_i32m1(tmp, current_max_vec, vl);
-            
-            __riscv_vsoxei32_v_i32m4(
-                H,
-                (vuint32m4_t)__riscv_vadd_vv_i32m4(
-                    __riscv_vmul_vx_i32m4(i_vec, cols, vl),
-                    j_vec,
-                    vl
-                ),
-                tmp,
-                vl
-            );
+            __riscv_vse32_v_i32m4(H + (i_start + offset - 1) * cols + (d - i_start - offset), tmp, vl);
 
             offset += vl;
         }
