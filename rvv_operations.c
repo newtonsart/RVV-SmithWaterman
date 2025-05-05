@@ -67,7 +67,8 @@ void fill_matrix(int *H, const int8_t *seq1, const int8_t *seq2, int rows, int c
 
             // Carga y extensión de signo corregida
             vint8m1_t vec_blosum8 = __riscv_vle8_v_i8m1(temp_blosum, vl);
-            vint32m1_t vec_blosum = __riscv_vwadd_vx_i32m1(vec_blosum8, 0, vl);  // Extensión correcta
+            vint16m2_t vec_blosum16 = __riscv_vwcvt_x_x_v_i16m2(vec_blosum8, vl);
+            vint32m1_t vec_blosum = __riscv_vwcvt_x_x_v_i32m1(vec_blosum16, vl);
 
             // Resto del código sin cambios
             vint32m1_t vec_diag = __riscv_vle32_v_i32m1(temp_diag, vl);
