@@ -123,10 +123,10 @@ int main(int argc, char **argv)
             int *H = create_matrix(rows, cols);
             int local_max_score = 0;
             int8_t *dbInt = optimizeCharSeq(db.sequence, cols - 1);
-            /*switch (lmul_value) {
-                case 1:*/
+            switch (lmul_value) {
+                case 1:
                     fill_matrix(H, queryInt, dbInt, rows, cols, &local_max_score);
-                    /*break;
+                    break;
                 case 2:
                     fill_matrix_lmul2(H, queryInt, dbInt, rows, cols, &local_max_score);
                     break;
@@ -139,7 +139,7 @@ int main(int argc, char **argv)
                 default:
                     fprintf(stderr, "Error: LMUL has to be 1, 2, 4 or 8.\n");
                     return 0;
-            }*/
+            }
 
             if (local_max_score > max_score) {
                 max_score = local_max_score;
