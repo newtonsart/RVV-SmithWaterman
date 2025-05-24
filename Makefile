@@ -1,5 +1,5 @@
 CC = clang-17
-CFLAGS = -O2 -march=rv64imafdcv -no-integrated-as -MMD
+CFLAGS = -O3 -march=rv64gcv -mabi=lp64d
 TARGET = RVVSW
 SRC = RVVSW.c fasta_parser.c blosum.c matrix_operations.c rvv_operations.c
 OBJ = $(SRC:.c=.o)
